@@ -464,10 +464,10 @@ void handle_get_request(int sockfd, char ** field_values, int status) {
         sprintf(response_metadata + strlen(response_metadata), "Content-Length: %ld\n", filesize);
         sprintf(response_metadata + strlen(response_metadata), "Content-Type: %s\n", field_values[ACCEPT]);
         sprintf(response_metadata + strlen(response_metadata), "Last-Modified: %s\n", get_last_modified(field_values[URL]));
-
+        sprintf(response_metadata + strlen(response_metadata), "\n");
         // printf("\n<Metadata>%s</Metadata>\n", response_metadata);
         // printf("%ld bytes of Metadata are generated.\n", strlen(response_metadata) + 1);
-        send_in_chunks(sockfd, response_metadata, strlen(response_metadata) + 1, 0, 50);
+        send_in_chunks(sockfd, response_metadata, strlen(response_metadata), 0, 50);
         // printf("%ld bytes of Metadata are sent.\n", bytes_sent);
 
         FILE * fp = fopen(field_values[URL], "r");
@@ -567,7 +567,7 @@ char ** get_status(const char * request, int * status) {
     return field_values;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     int sockfd, newsockfd;
     struct sockaddr_in server_address, client_address;
     socklen_t client_address_length;
@@ -580,7 +580,7 @@ int main() {
 
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
-    server_address.sin_port = htons(8080);
+    server_address.sin_port = htons(atoi(argv[1]));
 
     if (bind(sockfd, (struct sockaddr *) &server_address, sizeof(server_address)) == -1) {
         perror("Error [Unable to bind]");

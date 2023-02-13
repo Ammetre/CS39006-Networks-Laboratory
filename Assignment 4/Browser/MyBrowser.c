@@ -86,11 +86,13 @@ void print_with_len(const char * field_val) {
 }
 
 char ** get_fields(char ** lines, size_t line_count) {
+    // printf("Hi\n");
     char ** line_copies = (char **) malloc(line_count * sizeof(char *));
     for (size_t i = 0; i < line_count; i++) {
+        // printf("hello\n");
         line_copies[i] = strdup(lines[i]);
     }
-
+    // printf("Hi\n");
     char ** field_values = (char **) malloc(NUM_FIELDS * sizeof(char *));
 
     char * rest = line_copies[0];
@@ -102,7 +104,7 @@ char ** get_fields(char ** lines, size_t line_count) {
         char * rest = line_copies[i];
         char * field_name = strtok_r(rest, ":", &rest); rest++;
         char * field_val = strtok_r(rest, "\0", &rest);
-
+        printf("%s: %s\n", field_name, field_val);
         if (strcmp(field_name, "Expires") == 0) {
             field_values[EXPIRES] = field_val;
         } else if (strcmp(field_name, "Cache-Control") == 0) {
@@ -186,7 +188,10 @@ int recv_bytewise(int sockfd, char * buffer, int flags) {
         }
 
         total_bytes_received += bytes_received;
-        if (buffer[total_bytes_received - 1] == '\0') {
+        if (total_bytes_received >= 2 && buffer[total_bytes_received - 1] == '\n' && buffer[total_bytes_received - 2] == '\n') {
+            break;
+        }
+        if (total_bytes_received >= 4 && buffer[total_bytes_received - 1] == '\n' && buffer[total_bytes_received - 2] == '\r' && buffer[total_bytes_received - 3] == '\n' && buffer[total_bytes_received - 4] == '\r') {
             break;
         }
     } return total_bytes_received;
@@ -251,9 +256,11 @@ void get_recv(int sockfd, char * filename, char * content_type) {
             recv_bytewise(sockfd, response_metadata, 0);
             printf("%s", response_metadata);
             char ** lines = linearize(response_metadata);
-            char ** field_values = get_fields(lines, get_char_count(response_metadata, '\n'));
+            // printf("Hi\n");
+            char ** field_values = get_fields(lines, get_char_count(response_metadata, '\n') - 1);
+            // printf("Hi\n");
             free(lines);
-
+            // printf("Hi\n");
             if (strcmp(field_values[STATUS_MESSAGE], "OK") == 0) {
                 FILE* fp = fopen(filename, "w");
                 size_t filesize = atoi(field_values[CONTENT_LENGTH]);
