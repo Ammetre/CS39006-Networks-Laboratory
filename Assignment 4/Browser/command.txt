@@ -1,0 +1,15 @@
+GET http://127.0.0.1/docs/doc_1.pdf:8080
+GET http://127.0.0.1/docs/doc_2.pdf:8080
+GET http://127.0.0.1/docs/doc_3.pdf:8080
+GET http://127.0.0.1/imgs/img_1.jpg:8080
+GET http://127.0.0.1/imgs/img_2.jpg:8080
+GET http://127.0.0.1/imgs/img_3.jpg:8080
+GET http://127.0.0.1/htmls/html_1.html:8080
+GET http://127.0.0.1/htmls/html_2.html:8080
+GET http://127.0.0.1/htmls/html_3.html:8080
+GET http://127.0.0.1/docs/txt_2.txt:8080
+
+
+PUT http://127.0.0.1/htmls:8080 index.html
+
+GET http://203.110.245.250/~abhij/course/lab/SPL/Spring22/slides/unixcmds.pdf:80
