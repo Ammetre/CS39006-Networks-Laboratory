@@ -70,14 +70,15 @@ int get_char_count(const char * s, char c) {
 char ** linearize(const char * request) {
     char * request_copy = strdup(request);
     char * rest = request_copy;
-    size_t line_count = get_char_count(request, '\n');
+    size_t line_count = get_char_count(request, '\r') - 1;
     if (line_count == 0) {
         return NULL;
     }
 
     char ** lines = (char **) malloc(line_count * sizeof(char *));
     for (size_t i = 0; i < line_count; i++) {
-        lines[i] = strtok_r(rest, "\n", &rest);
+        lines[i] = strtok_r(rest, "\r", &rest); rest++;
+        printf("<Line>%s</Line>\n", lines[i]);
     } return lines;
 }
 
@@ -86,25 +87,27 @@ void print_with_len(const char * field_val) {
 }
 
 char ** get_fields(char ** lines, size_t line_count) {
-    // printf("Hi\n");
     char ** line_copies = (char **) malloc(line_count * sizeof(char *));
     for (size_t i = 0; i < line_count; i++) {
-        // printf("hello\n");
         line_copies[i] = strdup(lines[i]);
     }
-    // printf("Hi\n");
+
     char ** field_values = (char **) malloc(NUM_FIELDS * sizeof(char *));
 
     char * rest = line_copies[0];
     field_values[PROTOCOL] = strtok_r(rest, " ", &rest);
-    field_values[STATUS] = strdup(strtok_r(rest, " ", &rest));
-    field_values[STATUS_MESSAGE] = strtok_r(rest, "\0", &rest);
+    print_with_len(field_values[PROTOCOL]);
+    field_values[STATUS] = strtok_r(rest, " ", &rest);
+    print_with_len(field_values[STATUS]);
+    field_values[STATUS_MESSAGE] = strtok_r(rest, "\r", &rest); rest++;
+    print_with_len(field_values[STATUS_MESSAGE]);
 
     for (int i = 1; i < line_count; i++) {
         char * rest = line_copies[i];
         char * field_name = strtok_r(rest, ":", &rest); rest++;
-        char * field_val = strtok_r(rest, "\0", &rest);
-        printf("%s: %s\n", field_name, field_val);
+        char * field_val = strtok_r(rest, "\r", &rest); rest++;
+        print_with_len(field_val);
+
         if (strcmp(field_name, "Expires") == 0) {
             field_values[EXPIRES] = field_val;
         } else if (strcmp(field_name, "Cache-Control") == 0) {
@@ -118,8 +121,8 @@ char ** get_fields(char ** lines, size_t line_count) {
         } else if (strcmp(field_name, "Last-Modified") == 0) {
             field_values[LAST_MODIFIED] = field_val; 
         } else {
-            free(field_name);
-            free(field_val);
+            // free(field_name);
+            // free(field_val);
         }
     } 
 
@@ -179,6 +182,7 @@ int send_in_chunks(int sockfd, const char * buffer, size_t buffer_size, int flag
 
 int recv_bytewise(int sockfd, char * buffer, int flags) {
     int bytes_received = 0, total_bytes_received = 0;
+    int state = 0;
 
     while (1) {
         if ((bytes_received = recv(sockfd, buffer + total_bytes_received, 1, flags)) == -1) {
@@ -188,13 +192,10 @@ int recv_bytewise(int sockfd, char * buffer, int flags) {
         }
 
         total_bytes_received += bytes_received;
-        if (total_bytes_received >= 2 && buffer[total_bytes_received - 1] == '\n' && buffer[total_bytes_received - 2] == '\n') {
+        if (total_bytes_received >= 4 && buffer[total_bytes_received - 1] == '\n' && buffer[total_bytes_received - 2] == '\r' && buffer[total_bytes_received - 3] == '\n' && buffer[total_bytes_received - 4] == '\r') {    
             break;
         }
-        if (total_bytes_received >= 4 && buffer[total_bytes_received - 1] == '\n' && buffer[total_bytes_received - 2] == '\r' && buffer[total_bytes_received - 3] == '\n' && buffer[total_bytes_received - 4] == '\r') {
-            break;
-        }
-    } return total_bytes_received;
+    } return total_bytes_received - 4;
 }
 
 int recv_with_size(int sockfd, char * buffer, size_t buffer_size, int flags, size_t filesize) {
@@ -221,7 +222,7 @@ void get_stream_send(char * host_name, char * url_path, const char * type, int p
     struct tm * timeinfo, * previnfo;
 
     time(&rawtime);
-    prevtime = rawtime - 2*86400;
+    prevtime = rawtime - 100*86400;
     timeinfo = gmtime(&rawtime);
 
     char dat_str[128];
@@ -230,10 +231,10 @@ void get_stream_send(char * host_name, char * url_path, const char * type, int p
     previnfo = gmtime(&prevtime);
     strftime(mod_str, 127, "%a, %b %d %T %Y %Z",previnfo);
 
-    sprintf(get_stream, "GET %s HTTP/1.1\nHost: %s\nDate: %s\nAccept: %s\nAccept-Language: en-us, en;q=0.7\nIf-Modified-Since: %s\nConnection: close\n", url_path, host_name, dat_str, type, mod_str);
+    sprintf(get_stream, "GET %s HTTP/1.1\r\nHost: %s\r\nDate: %s\r\nAccept: %s\r\nAccept-Language: en-Us,en;q=0.5\r\nIf-Modified-Since: %s\r\nConnection: close\r\n\r\n", url_path, host_name, dat_str, type, mod_str);
     // sprintf(get_stream, "GET /~abhij/course/lab/SPL/Spring22/slides/unixcmds.pdf HTTP/1.1\nHost: 203.110.245.250:80\nDate: %s\nAccept: %s\nAccept-Language: en-Us, en;q=0.7\nIf-Modified-Since: %s\nConnection: close\n", dat_str, type, mod_str);
     printf("%s\n", get_stream);
-    send_in_chunks(sockfd, get_stream, strlen(get_stream) + 1, 0, 50);
+    send(sockfd, get_stream, strlen(get_stream), 0);
 }
 
 void get_recv(int sockfd, char * filename, char * content_type) {
@@ -255,17 +256,21 @@ void get_recv(int sockfd, char * filename, char * content_type) {
         default:
             recv_bytewise(sockfd, response_metadata, 0);
             printf("%s", response_metadata);
+            printf("\nResponse Received!\n");
             char ** lines = linearize(response_metadata);
-            // printf("Hi\n");
-            char ** field_values = get_fields(lines, get_char_count(response_metadata, '\n') - 1);
-            // printf("Hi\n");
+            printf("\nLinearization Complete!\n");
+            char ** field_values = get_fields(lines, get_char_count(response_metadata, '\r') - 1);
+            printf("\nObtained Fields!\n");
             free(lines);
-            // printf("Hi\n");
+
             if (strcmp(field_values[STATUS_MESSAGE], "OK") == 0) {
-                FILE* fp = fopen(filename, "w");
+                FILE* fp = fopen(filename, "wb");
                 size_t filesize = atoi(field_values[CONTENT_LENGTH]);
-                recv_with_size(sockfd, buffer, sizeof(buffer), 0, filesize);
-                fwrite(buffer, 1, filesize, fp);
+                printf("%ld bytes of content are to be received.\n", filesize);
+                size_t bytes_received = recv_with_size(sockfd, buffer, sizeof(buffer), 0, filesize);
+                printf("%ld bytes of content were received.\n", bytes_received);
+                size_t bytes_written = fwrite(buffer, 1, filesize, fp);
+                printf("%ld bytes of content were written.\n", bytes_written);
                 fclose(fp);
             } else {
                 fflush(stdout);
@@ -426,26 +431,26 @@ void put_stream_send (char * host_name, char * url_path, const char * type, int 
     char* type_str = strrchr(fileplace,'.');
     type_str = type_str + 1;
     if (strcmp(type_str,"html") == 0) {
-        sprintf(put_stream, "PUT %s/%s HTTP/1.1\nHost: %s:%d\nDate: %s\nAccept: %s\nAccept-Language: en-us, en;q=0.7\nIf-Modified-Since: %s\nConnection: close\nContent-Language: en-us\nContent-Type: text/html\nContent-Length: %lu\n",url_path, fileplace, host_name, port, dat_str,type,mod_str,size);
+        sprintf(put_stream, "PUT %s/%s HTTP/1.1\r\nHost: %s\r\nDate: %s\r\nAccept: %s\r\nAccept-Language: en-us, en;q=0.7\r\nIf-Modified-Since: %s\r\nConnection: close\r\nContent-Language: en-us\r\nContent-Type: text/html\r\nContent-Length: %lu\r\n\r\n",url_path, fileplace, host_name, dat_str,type,mod_str,size);
     } else if (strcmp(type_str,"pdf") == 0) {
-        sprintf(put_stream, "PUT %s/%s HTTP/1.1\nHost: %s:%d\nDate: %s\nAccept: %s\nAccept-Language: en-us, en;q=0.7\nIf-Modified-Since: %s\nConnection: close\nContent-Language: en-us\nContent-Type: application/pdf\nContent-Length: %lu\n",url_path, fileplace, host_name, port, dat_str,type,mod_str,size);
+        sprintf(put_stream, "PUT %s/%s HTTP/1.1\r\nHost: %s\r\nDate: %s\r\nAccept: %s\r\nAccept-Language: en-us, en;q=0.7\r\nIf-Modified-Since: %s\r\nConnection: close\r\nContent-Language: en-us\r\nContent-Type: application/pdf\r\nContent-Length: %lu\r\n\r\n",url_path, fileplace, host_name, dat_str,type,mod_str,size);
     } else if (strcmp(type_str,"jpeg")==0) {
-        sprintf(put_stream, "PUT %s/%s HTTP/1.1\nHost: %s:%d\nDate: %s\nAccept: %s\nAccept-Language: en-us, en;q=0.7\nIf-Modified-Since: %s\nConnection: close\nContent-Language: en-us\nContent-Type: image/jpeg\nContent-Length: %lu\n",url_path, fileplace, host_name, port, dat_str,type,mod_str,size);
+        sprintf(put_stream, "PUT %s/%s HTTP/1.1\r\nHost: %s\r\nDate: %s\r\nAccept: %s\r\nAccept-Language: en-us, en;q=0.7\r\nIf-Modified-Since: %s\r\nConnection: close\r\nContent-Language: en-us\r\nContent-Type: image/jpeg\r\nContent-Length: %lu\r\n\r\n",url_path, fileplace, host_name, dat_str,type,mod_str,size);
     } else {
-        sprintf(put_stream, "PUT %s/%s HTTP/1.1\nHost: %s:%d\nDate: %s\nAccept: %s\nAccept-Language: en-us, en;q=0.7\nIf-Modified-Since: %s\nConnection: close\nContent-Language: en-us\nContent-Type: text/*\nContent-Length: %lu\n",url_path, fileplace, host_name, port, dat_str,type,mod_str,size);
+        sprintf(put_stream, "PUT %s/%s HTTP/1.1\r\nHost: %s\r\nDate: %s\r\nAccept: %s\r\nAccept-Language: en-us, en;q=0.7\r\nIf-Modified-Since: %s\r\nConnection: close\r\nContent-Language: en-us\r\nContent-Type: text/*\r\nContent-Length: %lu\r\n\r\n",url_path, fileplace, host_name, dat_str,type,mod_str,size);
     }
 
-    send_in_chunks(sockfd, put_stream, strlen(put_stream) + 1, 0, 50);
-    // printf("%ld bytes of Metadata were generated.\n", strlen(put_stream) + 1);
-    // printf("%ld bytes of Metadata were sent.\n", bytes_sent);
-    // printf("<Metadata>%s</Metadata>\n", put_stream);
+    printf("<Metadata>%s</Metadata>\n", put_stream);
+    printf("%ld bytes of Metadata were generated.\n", strlen(put_stream));
+    size_t bytes_sent = send(sockfd, put_stream, strlen(put_stream), 0);
+    printf("%ld bytes of Metadata were sent.\n", bytes_sent);
 
     char buffer[MAX_BUFFER_SIZE];
-    FILE* fp = fopen(fileplace, "r");
-    fread(buffer, 1, size, fp);
-    // printf("%ld bytes of content were read.\n", bytes_read);
-    send_in_chunks(sockfd, buffer, size, 0, 50);
-    // printf("%ld bytes of content were sent.\n", bytes_sent);
+    FILE* fp = fopen(fileplace, "rb");
+    size_t bytes_read = fread(buffer, 1, size, fp);
+    printf("%ld bytes of content were read.\n", bytes_read);
+    bytes_sent = send(sockfd, buffer, size, 0);
+    printf("%ld bytes of content were sent.\n", bytes_sent);
 
     fclose(fp);
 }
