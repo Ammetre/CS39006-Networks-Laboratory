@@ -35,8 +35,8 @@
 #define NOT_FOUND 3
 #define NOT_MODIFIED 4
 
-const char * status_message[] = {"OK", "BAD REQUEST", "FORBIDDEN", "NOT FOUND", "NOT MODIFIED"};
-const int status_code[] = {200, 400, 403, 404, 304};
+const char * status_message[] = {"OK", "BAD REQUEST", "FORBIDDEN", "NOT FOUND"};
+const int status_code[] = {200, 400, 403, 404};
 
 int min(int a, int b) {
     return a < b ? a : b;
@@ -101,7 +101,7 @@ time_t get_gmt_offset() {
     return lt.tm_gmtoff;
 }
 
-time_t http_time_to_rawtime(const char * http_time) {
+struct tm * http_time_to_tinfo(const char * http_time) {
     struct tm * tm_info = (struct tm *) malloc(sizeof(struct tm));
     char * http_time_copy = strdup(http_time);
     char * token = NULL;
@@ -198,10 +198,8 @@ time_t http_time_to_rawtime(const char * http_time) {
     tm_info->tm_zone = strdup(token);
 
     free(http_time_copy);
-    time_t t = mktime(tm_info);
-    free(tm_info);
 
-    return t;
+    return tm_info;
 }
 
 char * ctime_to_http_time(char * formatted_time) {
@@ -467,10 +465,10 @@ void handle_get_request(int sockfd, char ** field_values, int status) {
 
     sprintf(response_metadata, "HTTP/1.1 %d %s\r\n", status_code[status], status_message[status]);
     sprintf(response_metadata + strlen(response_metadata), "Expires: %s\r\n", get_http_time(3));
-    sprintf(response_metadata + strlen(response_metadata), "Cache-Control: no-store\r\n");
 
     if (status == OK) {
         size_t filesize = get_size(field_values[URL]);
+        sprintf(response_metadata + strlen(response_metadata), "Cache-Control: no-store\r\n");
         sprintf(response_metadata + strlen(response_metadata), "Content-Language: en-US\r\n");
         sprintf(response_metadata + strlen(response_metadata), "Content-Length: %ld\r\n", filesize);
         sprintf(response_metadata + strlen(response_metadata), "Content-Type: %s\r\n", field_values[ACCEPT]);
@@ -488,6 +486,7 @@ void handle_get_request(int sockfd, char ** field_values, int status) {
         bytes_sent = send(sockfd, buffer, filesize, 0);
         printf("%ld bytes of content are sent.\n", bytes_sent);
     } else {
+        sprintf(response_metadata + strlen(response_metadata), "Cache-Control: no-store\r\n\r\n");
         send(sockfd, response_metadata, strlen(response_metadata) + 1, 0);
     }    
 }
@@ -521,6 +520,14 @@ void handle_put_request(int sockfd, char ** field_values, int status) {
     } send(sockfd, response_metadata, strlen(response_metadata), 0);
 }
 
+void handle_methoderror_request(int sockfd, char ** field_values, int status) {
+    char response_metadata[MAX_METADATA_SIZE];
+    sprintf(response_metadata, "HTTP/1.1 %d %s\r\n", status_code[status], status_message[status]);
+    sprintf(response_metadata + strlen(response_metadata), "Expires: %s\r\n", get_http_time(3));
+    sprintf(response_metadata + strlen(response_metadata), "Cache-Control: no-store\r\n\r\n");
+    send(sockfd, response_metadata, strlen(response_metadata), 0);
+}
+
 char ** get_status(const char * request, int * status) {
     size_t line_count = get_char_count(request, '\r') - 1;
     char ** lines = linearize(request);
@@ -545,40 +552,32 @@ char ** get_status(const char * request, int * status) {
     // printf("\nNOT FOUND Check Complete\n");
 
 
-    // if (strcmp(field_values[METHOD], "GET") == 0 && access(field_values[URL], R_OK) != 0) {
-    //     *status = FORBIDDEN;
-    //     printf("\nStatus Check Complete\n");
-    //     printf("<Staus>%d %s</Status>\n", status_code[*status], status_message[*status]);
-    //     return field_values;
-    // } else {
-    //     if (access(field_values[URL], F_OK) == 0 || access(field_values[URL], W_OK) != 0) {
-    //         *status = FORBIDDEN;
-    //         printf("\nStatus Check Complete\n");
-    //         printf("<Staus>%d %s</Status>\n", status_code[*status], status_message[*status]);
-    //         return field_values;
-    //     }
-    // }
+    if (strcmp(field_values[METHOD], "GET") == 0 && access(field_values[URL], R_OK) != 0) {
+        *status = FORBIDDEN;
+        printf("\nStatus Check Complete\n");
+        printf("<Staus>%d %s</Status>\n", status_code[*status], status_message[*status]);
+        return field_values;
+    } else {
+        if (access(field_values[URL], F_OK) == 0 && access(field_values[URL], W_OK) != 0) {
+            *status = FORBIDDEN;
+            printf("\nStatus Check Complete\n");
+            printf("<Staus>%d %s</Status>\n", status_code[*status], status_message[*status]);
+            return field_values;
+        }
+    }
 
     // printf("\nFORBIDDEN Check Complete\n");
 
-    time_t pivot = http_time_to_rawtime(field_values[IF_MODIFIED_SINCE]);
-    time_t modified = http_time_to_rawtime(get_last_modified(field_values[URL]));
-
-
-    // if (modified < pivot) {
-    //     *status = NOT_MODIFIED;
-    //     printf("\nStatus Check Complete\n");
-    //     printf("<Staus>%d %s</Status>\n", status_code[*status], status_message[*status]);
-    //     return field_values;
-    // }
-
-    // printf("\nLAST MODIFIED Check Complete\n");
-
-    // printf("\nStatus Check Complete\n");
-    // printf("<Staus>%d %s</Status>\n", status_code[*status], status_message[*status]);
-
     *status = OK;
     return field_values;
+}
+
+void log_access_details(char ** field_values, struct sockaddr_in * client_address) {
+    printf("<InAccess>%s</InAccess>\n", field_values[DATE]);
+    struct tm * time_info = http_time_to_tinfo(field_values[DATE]);
+    FILE * fp = fopen("AccessLog.txt", "a");
+    fprintf(fp, "<%d/%d/%d>:<%d:%d:%d>:<%s>:<%d>:<%s>:<%s>\n", time_info->tm_mday, time_info->tm_mon, time_info->tm_year + 1900, time_info->tm_hour, time_info->tm_min, time_info->tm_sec, inet_ntoa(client_address->sin_addr), ntohs(client_address->sin_port), field_values[METHOD], field_values[URL] + 1);
+    fclose(fp);
 }
 
 int main() {
@@ -624,10 +623,13 @@ int main() {
 
             int status = OK;
             char ** field_values = get_status(request_metadata, &status);
+            log_access_details(field_values, &client_address);
             if (strcmp(field_values[METHOD], "GET") == 0) {
                 handle_get_request(newsockfd, field_values, status);
-            } else {
+            } else  if (strcmp(field_values[METHOD], "PUT") == 0) {
                 handle_put_request(newsockfd, field_values, status);
+            } else {
+                handle_methoderror_request(newsockfd, field_values, status);
             }
             
             free(field_values);

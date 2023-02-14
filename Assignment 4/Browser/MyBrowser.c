@@ -222,7 +222,7 @@ void get_stream_send(char * host_name, char * url_path, const char * type, int p
     struct tm * timeinfo, * previnfo;
 
     time(&rawtime);
-    prevtime = rawtime - 100*86400;
+    prevtime = rawtime - 2*86400;
     timeinfo = gmtime(&rawtime);
 
     char dat_str[128];
