@@ -281,9 +281,7 @@ size_t get_line_count(const char * request) {
 char ** linearize(const char * request) {
     char * request_copy = strdup(request);
     char * rest = request_copy;
-    printf("<Request>%s</Request>\n", request);
     size_t line_count = get_char_count(request, '\r') - 1;
-    printf("%ld\n", line_count);
     if (line_count == 0) {
         return NULL;
     }
@@ -291,7 +289,6 @@ char ** linearize(const char * request) {
     char ** lines = (char **) malloc(line_count * sizeof(char *));
     for (size_t i = 0; i < line_count; i++) {
         lines[i] = strtok_r(rest, "\r", &rest); rest++;
-        printf("<Line>%s</Line>\n", lines[i]);
     } return lines;
 }
 
@@ -309,23 +306,19 @@ char ** get_fields(char ** lines, size_t line_count) {
 
     char * rest = line_copies[0];
     field_values[METHOD] = strtok_r(rest, " ", &rest);
-    print_with_len(field_values[METHOD]);
     
     field_values[URL] = strdup(strtok_r(rest, " ", &rest));
     char * full_url = (char *) malloc(strlen((field_values[URL]) + 2) * sizeof(char));
     sprintf(full_url, ".%s", field_values[URL]);
     free(field_values[URL]);
     field_values[URL] = full_url;
-    print_with_len(field_values[URL]);
     field_values[PROTOCOL] = strtok_r(rest, "\r", &rest); rest++;
-    print_with_len(field_values[PROTOCOL]);
     
 
     for (int i = 1; i < line_count; i++) {
         char * rest = line_copies[i];
         char * field_name = strtok_r(rest, ":", &rest); rest++; 
         char * field_val = strtok_r(rest, "\r", &rest); rest++;
-        print_with_len(field_val);
 
         if (strcmp(field_name, "Host") == 0) {
             field_values[HOST] = field_val;
@@ -353,20 +346,15 @@ char ** get_fields(char ** lines, size_t line_count) {
 
 int line_syntax_check(char ** lines, size_t linecount) {
     if (linecount < 2) {
-        printf("LCK 1 - %ld\n", linecount);
         return 0;
     }
 
     if (get_char_count(lines[0], ' ') != 2) {
-        printf("%s\n", lines[0]);
-        printf("%d\n", get_char_count(lines[0], ' '));
-        printf("LCK 2\n");
         return 0;
     }
 
     for (size_t i = 1; i < linecount; i++) {
         if (get_char_count(lines[i], ':') == 0 || get_char_count(lines[i], ' ') == 0) {
-            printf("LCK 3 - %s\n", lines[i]);
             return 0;
         }
     }
@@ -376,12 +364,10 @@ int line_syntax_check(char ** lines, size_t linecount) {
 
 int field_syntax_check(char ** field_values) {
     if (field_values == NULL) {
-        printf("FCK 1\n");
         return 0;
     }
 
     if (field_values[METHOD] == NULL || field_values[URL] == NULL || field_values[PROTOCOL] == NULL) {
-        printf("FCK 2\n");
         return 0;
     }
 
@@ -389,47 +375,28 @@ int field_syntax_check(char ** field_values) {
     if (strcmp(field_values[METHOD], "GET") == 0) {
         for (int i = 0; i <= IF_MODIFIED_SINCE; i++) {
             if (field_values[i] == NULL) {
-                printf("FCK 3 - %d\n", i);
                 return 0;
             }
         }
     } 
     
-    // PUT may not require asize_t fields - If-Modified-Since
     else if (strcmp(field_values[METHOD], "PUT") == 0) {
         for (int i = 0; i <= CONTENT_TYPE; i++) {
+            if (i == IF_MODIFIED_SINCE) continue;
             if (!field_values[i]) {
                 return 0;
             }
         }
     } else {
-        printf("FCK 4\n");
         return 0;
     }
 
     if (strcmp(field_values[PROTOCOL], "HTTP/1.1") != 0) {
-        printf("FCK 5\n");
         return 0;
     }
-
-    // Host check
 
     if (strcmp(field_values[CONNECTION], "close") != 0) {
-        printf("FCK 6\n");
         return 0;
-    }
-
-    // Date check
-
-    // Accept check
-
-    // Accept-Language check
-
-    if (strcmp(field_values[METHOD], "PUT") == 0) {
-        // if (strcmp(field_values[CONTENT_TYPE], field_values[ACCEPT])) {
-        //     printf("CK 8\n");
-        //     return 0;
-        // }
     }
 
     return 1;
@@ -474,17 +441,17 @@ void handle_get_request(int sockfd, char ** field_values, int status) {
         sprintf(response_metadata + strlen(response_metadata), "Content-Type: %s\r\n", field_values[ACCEPT]);
         sprintf(response_metadata + strlen(response_metadata), "Last-Modified: %s\r\n\r\n", get_last_modified(field_values[URL]));
 
-        printf("\n<Metadata>%s</Metadata>\n", response_metadata);
-        printf("%ld bytes of Metadata are generated.\n", strlen(response_metadata));
-        size_t bytes_sent = send(sockfd, response_metadata, strlen(response_metadata), 0);
-        printf("%ld bytes of Metadata are sent.\n", bytes_sent);
+        // printf("\n<Metadata>%s</Metadata>\n", response_metadata);
+        // printf("%ld bytes of Metadata are generated.\n", strlen(response_metadata));
+        send(sockfd, response_metadata, strlen(response_metadata), 0);
+        // printf("%ld bytes of Metadata are sent.\n", bytes_sent);
 
         FILE * fp = fopen(field_values[URL], "rb");
         size_t bytes_read = fread(buffer, 1, filesize, fp);
-        printf("%ld bytes of content are read.\n", bytes_read);
+        // printf("%ld bytes of content are read.\n", bytes_read);
 
-        bytes_sent = send(sockfd, buffer, filesize, 0);
-        printf("%ld bytes of content are sent.\n", bytes_sent);
+        send(sockfd, buffer, filesize, 0);
+        // printf("%ld bytes of content are sent.\n", bytes_sent);
     } else {
         sprintf(response_metadata + strlen(response_metadata), "Cache-Control: no-store\r\n\r\n");
         send(sockfd, response_metadata, strlen(response_metadata) + 1, 0);
@@ -501,8 +468,8 @@ void handle_put_request(int sockfd, char ** field_values, int status) {
     }
 
     size_t filesize = atoi(field_values[CONTENT_LENGTH]);
-    size_t bytes_received = recv_with_size(sockfd, buffer, 0, filesize);
-    printf("%ld bytes of content were received.", bytes_received);
+    recv_with_size(sockfd, buffer, 0, filesize);
+    // printf("%ld bytes of content were received.", bytes_received);
 
     if (status == OK) {
         FILE * fp = fopen(field_values[URL], "wb");
@@ -573,7 +540,6 @@ char ** get_status(const char * request, int * status) {
 }
 
 void log_access_details(char ** field_values, struct sockaddr_in * client_address) {
-    printf("<InAccess>%s</InAccess>\n", field_values[DATE]);
     struct tm * time_info = http_time_to_tinfo(field_values[DATE]);
     FILE * fp = fopen("AccessLog.txt", "a");
     fprintf(fp, "<%d/%d/%d>:<%d:%d:%d>:<%s>:<%d>:<%s>:<%s>\n", time_info->tm_mday, time_info->tm_mon, time_info->tm_year + 1900, time_info->tm_hour, time_info->tm_min, time_info->tm_sec, inet_ntoa(client_address->sin_addr), ntohs(client_address->sin_port), field_values[METHOD], field_values[URL] + 1);
@@ -619,7 +585,7 @@ int main() {
             if (recv_bytewise(newsockfd, request_metadata, sizeof(request_metadata)) == -1) {
                 printf("Error [Unable to receive in chunks]: Not asize_t bytes were received\n");
                 exit(EXIT_FAILURE);
-            } printf("%s", request_metadata);
+            } printf("\n%s\n", request_metadata);
 
             int status = OK;
             char ** field_values = get_status(request_metadata, &status);
