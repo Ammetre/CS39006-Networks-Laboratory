@@ -1,0 +1,16 @@
+A: Aritra's work
+R: Ritwik's work
+Function status:    N-> Not started
+                    O-> Ongoing
+                    Y-> Done (and works properly)[add notes in square brackets pls]
+
+A:
+my_send     N
+my_recv     N
+my_connect  N
+my_accept   N
+R:
+my_socket   N
+my_close    N
+my_bind     N
+my_listen   N
