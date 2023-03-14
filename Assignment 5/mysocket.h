@@ -19,7 +19,7 @@ typedef struct MyTCP_ {
     int sockfd;
     pthread_t R, S;
     char send_queue[MAX_SEND_QUEUE_SIZE][MAX_MESSAGE_SIZE];
-    char recv_qeueu[MAX_RECV_QUEUE_SIZE][MAX_MESSAGE_SIZE];
+    char recv_queue[MAX_RECV_QUEUE_SIZE][MAX_MESSAGE_SIZE];
 } MyTCP;
 
 MyTCP * my_socket(int domain, int type, int protocol);

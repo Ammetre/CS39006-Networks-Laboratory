@@ -7,7 +7,7 @@ MyTCP * my_socket(int domain, int type, int protocol) {
     }
 
     int sockfd;
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    if ((sockfd = socket(domain, type, protocol)) < 0) {
 		perror("[Internal Error] Unable to create socket");
         exit(EXIT_FAILURE);
 	} 
