@@ -5,8 +5,8 @@ Function status:    N-> Not started
                     Y-> Done (and works properly)[add notes in square brackets pls]
 
 A:
-my_send     N
-my_recv     N
+my_send     O
+my_recv     O
 my_connect  N
 my_accept   N
 R:

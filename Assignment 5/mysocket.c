@@ -135,3 +135,31 @@ void my_close(MyTCP * socket) {
         exit(EXIT_FAILURE);
     }
 }
+void R(void){
+    while(1){
+        exit(EXIT_FAILURE);
+    }
+}
+void S(void){
+    while(1){
+        exit(EXIT_FAILURE);
+    }
+}
+void my_send(MyTCP * socket, void * buf, size_t n, int flags){
+    sem_wait(&(socket->send_empty));
+    sem_wait(&(socket->send_mutex));
+    strncpy(socket->send_queue[socket->send_in],(char *)buf,MAX_MESSAGE_SIZE);
+    socket->send_in++;
+    socket->send_in %= MAX_SEND_QUEUE_SIZE;
+    sem_post(&(socket->send_mutex));
+    sem_post(&(socket->send_full));
+}
+void my_recv(MyTCP * socket, void * buf, size_t n, int flags){
+    sem_wait(&(socket->recv_full));
+    sem_wait(&(socket->recv_mutex));
+    strncpy((char *)buf,socket->recv_queue[socket->recv_out],MAX_MESSAGE_SIZE);
+    socket->recv_out++;
+    socket->recv_out %= MAX_SEND_QUEUE_SIZE;
+    sem_post(&(socket->recv_mutex));
+    sem_post(&(socket->recv_empty));
+}
