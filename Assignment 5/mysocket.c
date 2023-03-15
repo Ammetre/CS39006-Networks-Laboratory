@@ -145,7 +145,8 @@ void S(void){
         exit(EXIT_FAILURE);
     }
 }
-void my_send(MyTCP * socket, void * buf, size_t n, int flags){
+ssize_t my_send(MyTCP * socket, void * buf, size_t n, int flags){
+    if(n > MAX_MESSAGE_SIZE) return -1;
     sem_wait(&(socket->send_empty));
     sem_wait(&(socket->send_mutex));
     strncpy(socket->send_queue[socket->send_in],(char *)buf,MAX_MESSAGE_SIZE);
@@ -153,8 +154,9 @@ void my_send(MyTCP * socket, void * buf, size_t n, int flags){
     socket->send_in %= MAX_SEND_QUEUE_SIZE;
     sem_post(&(socket->send_mutex));
     sem_post(&(socket->send_full));
+    return n;
 }
-void my_recv(MyTCP * socket, void * buf, size_t n, int flags){
+void my_recv(MyTCP * socket, void * buf, int flags){
     sem_wait(&(socket->recv_full));
     sem_wait(&(socket->recv_mutex));
     strncpy((char *)buf,socket->recv_queue[socket->recv_out],MAX_MESSAGE_SIZE);
