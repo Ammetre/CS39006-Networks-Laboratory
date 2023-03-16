@@ -1,8 +1,12 @@
-CC=gcc
-flags=-Wall
-
-server: server.c mysocket.c mysocket.h
-	$(CC) $(flags) server.c mysocket.c -o server
-
-client: client.c mysocket.c mysocket.h
-	$(CC) $(flags) client.c mysocket.c -o client
+library: mysocket.o
+	ar rcs libmsocket.a mysocket.o
+mysocket.o: mysocket.h mysocket.c
+	gcc $(CFLAGS) mysocket.c
+CFLAGS = -g -c
+OBJFILES = mysocket.o
+LIBNAME = libmsocket.a
+RM = rm -f
+clean:
+	-$(RM) $(OBJFILES)
+distclean:
+	-$(RM) $(OBJFILES) $(LIBNAME)
