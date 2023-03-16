@@ -73,13 +73,15 @@ int main(int argc, char * argv[]) {
         newsocket = my_accept(socket, (struct sockaddr *) &client_address, &client_address_length);
 
         requests++;
-        receive_all(newsocket, buffer, 50);
+        printf("%d\n", newsocket->sockfd);
+        my_recv(newsocket, buffer, 0);
         printf("Message from client: %s\n", buffer);
         memset(buffer, 0, sizeof(buffer));
         strcpy(buffer, "Geralt of Rivia");
-        send_all(newsocket, buffer, strlen(buffer) + 1, 50);
+        my_send(newsocket, buffer, strlen(buffer) + 1, 0);
 
         my_close(newsocket);
+        printf("Closed!\n");
     }
 
     my_close(socket);

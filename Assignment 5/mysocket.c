@@ -7,14 +7,42 @@ MyTCP * my_socket(int domain, int type, int protocol) {
     }
 
     int sockfd;
-    if ((sockfd = socket(domain, type, protocol)) < 0) {
+    if ((sockfd = socket(domain, SOCK_STREAM, protocol)) < 0) {
 		perror("[Internal Error] Unable to create socket");
         exit(EXIT_FAILURE);
 	} 
-    
+
     MyTCP * socket = (MyTCP *) malloc(sizeof(MyTCP));
     socket->sockfd = sockfd;
-    
+
+    socket->send_in = 0;
+    socket->send_out = 0;
+    socket->send_count = 0;
+    socket->recv_in = 0;
+    socket->recv_out = 0;
+    socket->recv_count = 0;
+
+    socket->RshouldClose = 0;
+    socket->SshouldClose = 0;
+
+    pthread_mutex_init(&socket->mutexSend, NULL);
+    pthread_mutex_init(&socket->mutexRecv, NULL);
+    pthread_cond_init(&socket->condSendEmpty, NULL);
+    pthread_cond_init(&socket->condRecvEmpty, NULL);
+    pthread_cond_init(&socket->condSendFull, NULL); 
+    pthread_cond_init(&socket->condRecvFull, NULL); 
+
+    void * arg = (void *) socket;
+    if (pthread_create(&socket->S, NULL, &send_routine, arg) < 0) {
+        perror("[Internal Error] Unable to create send thread");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_create(&socket->R, NULL, &recv_routine, arg) < 0) {
+        perror("[Internal Error] Unable to create recv thread");
+        exit(EXIT_FAILURE);
+    }
+
     return socket;
 }
 
@@ -56,6 +84,35 @@ MyTCP * my_accept(MyTCP * socket, struct sockaddr *addr, socklen_t *addrlen) {
 
     MyTCP * newsocket = (MyTCP *) malloc(sizeof(MyTCP));
     newsocket->sockfd = newsockfd;
+
+    newsocket->send_in = 0;
+    newsocket->send_out = 0;
+    newsocket->send_count = 0;
+    newsocket->recv_in = 0;
+    newsocket->recv_out = 0;
+    newsocket->recv_count = 0;
+
+    socket->RshouldClose = 0;
+    socket->SshouldClose = 0;
+
+    pthread_mutex_init(&newsocket->mutexSend, NULL);
+    pthread_mutex_init(&newsocket->mutexRecv, NULL);
+    pthread_cond_init(&newsocket->condSendEmpty, NULL);
+    pthread_cond_init(&newsocket->condRecvEmpty, NULL);
+    pthread_cond_init(&newsocket->condSendFull, NULL); 
+    pthread_cond_init(&newsocket->condRecvFull, NULL); 
+
+    void * arg = (void *) newsocket;
+    if (pthread_create(&newsocket->S, NULL, &send_routine, arg) < 0) {
+        perror("[Internal Error] Unable to create send thread");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_create(&newsocket->R, NULL, &recv_routine, arg) < 0) {
+        perror("[Internal Error] Unable to create recv thread");
+        exit(EXIT_FAILURE);
+    }
+
     return newsocket;
 }
 
@@ -71,60 +128,9 @@ void my_connect(MyTCP * socket, const struct sockaddr *addr, socklen_t addrlen) 
 	}
 }
 
-/*********************************************\
-| Function to find the minimum of two integers |
-| Parameters: a - The first integer            |
-|             b - The second integer           |
-| Returns: The minimum of a and b              |
-\*********************************************/
-int min(int a, int b) {
-    return a < b ? a : b;
-}
-
-/*****************************************************************\
-| Function to send data to a socket                                |
-| Parameters: socket      - The socket to which data is to be sent |
-|             buffer      - The buffer to be sent                  |
-|             buffer_size - The size of the buffer to be sent      |
-|             rate        - The rate at which data is to be sent   |
-| Returns: The number of bytes sent, -1 for errors                 |
-\*****************************************************************/
-int send_all(MyTCP * socket, char * buffer, size_t buffer_size, size_t rate) {
-    int bytes_left = (int) buffer_size, bytes_sent = 0, total_bytes_sent = 0;
-
-    while (bytes_left > 0) {
-        if ((bytes_sent = send(socket->sockfd, buffer + total_bytes_sent, min(rate, bytes_left), 0)) < 0) {
-            return -1;
-        } 
-
-        total_bytes_sent += bytes_sent;
-        bytes_left -= bytes_sent;
-    } return bytes_sent;
-}
-
-/******************************************************************\
-| Function to receive data from a socket                            |
-| Parameters: socket - The socket from which data is to be received |
-|             buffer - The buffer in which data is to be received   |
-|             rate   - The rate at which data is to be received     |
-| Returns: The number of bytes received, -1 for errors              |
-\******************************************************************/
-int receive_all(MyTCP * socket, char * buffer, size_t rate) {
-    int bytes_received = 0, total_bytes_received = 0;
-    
-    while (1) {
-        if ((bytes_received = recv(socket->sockfd, buffer + total_bytes_received, rate, 0)) < 0) {
-            return -1;
-        }
-
-        total_bytes_received += bytes_received;
-        if (total_bytes_received > 0 && buffer[total_bytes_received - 1] == '\0') {
-            break;
-        }
-    } return total_bytes_received;
-}
-
 void my_close(MyTCP * socket) {
+    sleep(5);
+
     if (socket == NULL) {
         printf("[External Error] Unable to close socket: Socket does not exist.\n");
 		exit(EXIT_FAILURE);
@@ -134,34 +140,108 @@ void my_close(MyTCP * socket) {
         perror("[Internal Error] Unable to close socket");
         exit(EXIT_FAILURE);
     }
+
+    void * RreturnValue, * SreturnValue;
+    pthread_join(socket->R, &RreturnValue);
+    pthread_join(socket->S, &SreturnValue);
 }
-void R(void){
-    while(1){
-        exit(EXIT_FAILURE);
-    }
-}
-void S(void){
-    while(1){
-        exit(EXIT_FAILURE);
-    }
-}
-ssize_t my_send(MyTCP * socket, void * buf, size_t n, int flags){
-    if(n > MAX_MESSAGE_SIZE) return -1;
-    sem_wait(&(socket->send_empty));
-    sem_wait(&(socket->send_mutex));
+
+ssize_t my_send(MyTCP * socket, void * buf, size_t n, int flags) {
+    if (n > MAX_MESSAGE_SIZE) return -1;
+    pthread_mutex_lock(&socket->mutexSend);
+    while (socket->send_count == MAX_SEND_QUEUE_SIZE) {
+        printf("Send queue full. my_send waiting...\n");
+        pthread_cond_wait(&socket->condSendFull, &socket->mutexSend);
+    } 
+
+    printf("Send queue not full. Moving message '%s' into send queue.\n", (char *) buf);
     strncpy(socket->send_queue[socket->send_in],(char *)buf,MAX_MESSAGE_SIZE);
     socket->send_in++;
     socket->send_in %= MAX_SEND_QUEUE_SIZE;
-    sem_post(&(socket->send_mutex));
-    sem_post(&(socket->send_full));
+    socket->send_count++;
+
+    pthread_mutex_unlock(&socket->mutexSend);
+    pthread_cond_signal(&socket->condSendEmpty);
     return n;
 }
-void my_recv(MyTCP * socket, void * buf, int flags){
-    sem_wait(&(socket->recv_full));
-    sem_wait(&(socket->recv_mutex));
+
+void my_recv(MyTCP * socket, void * buf, int flags) {
+    pthread_mutex_lock(&socket->mutexRecv);
+    while (socket->recv_count == 0) {
+        printf("Recv queue empty. my_recv waiting...\n");
+        pthread_cond_wait(&socket->condRecvEmpty, &socket->mutexRecv);
+    }
+
+    printf("Recv queue not empty. Moving message '%s' from recv queue to buffer.\n", socket->recv_queue[socket->recv_out]);
     strncpy((char *)buf,socket->recv_queue[socket->recv_out],MAX_MESSAGE_SIZE);
     socket->recv_out++;
     socket->recv_out %= MAX_SEND_QUEUE_SIZE;
-    sem_post(&(socket->recv_mutex));
-    sem_post(&(socket->recv_empty));
+    socket->recv_count--;
+    
+    pthread_mutex_unlock(&socket->mutexRecv);
+    pthread_cond_signal(&socket->condRecvFull);
+}
+
+void * send_routine(void * arg) {
+
+    MyTCP * socket = (MyTCP *) arg;
+
+    while (1) {
+        pthread_mutex_lock(&socket->mutexSend);
+        while (socket->send_count == 0) {
+            printf("Send queue empty. S thread waiting...\n");
+            pthread_cond_wait(&socket->condSendEmpty, &socket->mutexSend);
+        }
+
+        printf("Send queue not empty. Sending message '%s'.\n", socket->send_queue[socket->send_out]);
+        printf("Sending to socket %d\n", socket->sockfd);
+        int bytes_sent = 0;
+        if ((bytes_sent = send(socket->sockfd, socket->send_queue[socket->send_out], strlen(socket->send_queue[socket->send_out]) + 1, 0)) <= 0) {
+            perror("[Internal Error] Unable to send");
+        } else {
+            printf("Bytes sent: %d\n", bytes_sent);
+            socket->send_out++;
+            socket->send_out %= MAX_SEND_QUEUE_SIZE;
+            socket->send_count--;
+        }
+
+        pthread_mutex_unlock(&socket->mutexSend);
+        pthread_cond_signal(&socket->condSendFull);
+
+        sleep(2);
+    }
+
+    return NULL;
+}
+
+void * recv_routine(void * arg) {
+
+    MyTCP * socket = (MyTCP *) arg;
+
+    while (1) {
+        pthread_mutex_lock(&socket->mutexRecv);
+        while (socket->recv_count == MAX_RECV_QUEUE_SIZE) {
+            printf("Recv queue full. R thread waiting...\n");
+            pthread_cond_wait(&socket->condRecvFull, &socket->mutexRecv);
+        }
+
+        int bytes_received = 0;
+        if ((bytes_received = recv(socket->sockfd, socket->recv_queue[socket->recv_in], MAX_MESSAGE_SIZE, 0)) <= 0) {
+            perror("[Internal Error] Unable to receive");
+        } else {
+            printf("Bytes received: %d\n", bytes_received);
+            printf("Recv queue not full. Moving message '%s' into recv queue.\n", socket->recv_queue[socket->recv_in]);
+            socket->recv_in++;
+            socket->recv_in %= MAX_RECV_QUEUE_SIZE;
+            socket->recv_count++;
+        }
+
+        pthread_testcancel();
+        pthread_mutex_unlock(&socket->mutexRecv);
+        pthread_cond_signal(&socket->condRecvEmpty);
+
+        sleep(2);
+    }
+
+    return NULL;
 }

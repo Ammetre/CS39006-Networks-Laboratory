@@ -49,10 +49,14 @@ int main(int argc, char * argv[]) {
 
     memset(buffer, 0, sizeof(buffer));
     strcpy(buffer, "Yennerfer of Vengerberg");
-    send_all(socket, buffer, strlen(buffer) + 1, 50);
+    my_send(socket, buffer, strlen(buffer) + 1, 0);
 
-    receive_all(socket, buffer, 50);
+    memset(buffer, 0, sizeof(buffer));
+    my_recv(socket, buffer, 0);
     printf("Message from server: %s\n", buffer);
 
     my_close(socket);
+    printf("Closed!\n");
+    
+    return 0;
 }
