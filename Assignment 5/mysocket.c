@@ -158,7 +158,7 @@ void my_connect(MyTCP * socket, const struct sockaddr *addr, socklen_t addrlen) 
 }
 
 void my_close(MyTCP * socket) {
-    sleep(5);
+    sleep(4);
 
     if (socket == NULL) {
         printf("[External Error] Unable to close socket: Socket does not exist.\n");
