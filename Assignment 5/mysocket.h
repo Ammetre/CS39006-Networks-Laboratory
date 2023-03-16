@@ -1,10 +1,11 @@
-#ifndef __MYSOCKET_H
-#define __MYSOCKET_H
+#pragma once
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h> 
 #include <netinet/in.h>
@@ -38,8 +39,7 @@ MyTCP * my_accept(MyTCP * socket, struct sockaddr *addr, socklen_t *addrlen);
 void my_connect(MyTCP * socket, const struct sockaddr *addr, socklen_t addrlen);
 ssize_t my_send(MyTCP * socket, void * buf, size_t n, int flags);
 void my_recv(MyTCP * socket, void * buf, int flags);
-// int min(int a, int b);
-// int send_all(MyTCP * socket, char * buffer, size_t buffer_size, size_t rate);
-// int receive_all(MyTCP * socket, char * buffer, size_t rate);
+int min(int a, int b);
+int send_all(MyTCP * socket, void * buffer, size_t buffer_size, size_t rate);
+int receive_all(MyTCP * socket, void * buffer, size_t buffer_size, size_t rate);
 void my_close(MyTCP * socket);
-#endif
