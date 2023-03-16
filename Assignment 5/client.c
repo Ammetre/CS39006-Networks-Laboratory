@@ -48,7 +48,7 @@ int main(int argc, char * argv[]) {
 	my_connect(socket, (struct sockaddr *) &server_address, sizeof(server_address));
 
     memset(buffer, 0, sizeof(buffer));
-    strcpy(buffer, "Yennerfer of Vengerberg");
+    strcpy(buffer, "Yennefer of Vengerberg");
     my_send(socket, buffer, strlen(buffer) + 1, 0);
 
     memset(buffer, 0, sizeof(buffer));
@@ -56,7 +56,11 @@ int main(int argc, char * argv[]) {
     printf("Message from server: %s\n", buffer);
 
     my_close(socket);
-    printf("Closed!\n");
-    
+    free(socket);
+    // free(argv);
+    // if (socket == NULL) {
+    //     printf("Freee Succeesss\n");
+    // }
+    // printf("Hello\n");
     return 0;
 }

@@ -1,8 +1,10 @@
 CC=gcc
-flags=-Wall
+flags=-Wall -L.
+library: mysocket.c mysocket.h
+	gcc -c mysocket.c
+	ar rcs libmsocket.a mysocket.o 
+server: server.c
+	$(CC) $(flags) server.c -lmsocket -o server
 
-server: server.c mysocket.c mysocket.h
-	$(CC) $(flags) server.c mysocket.c -o server
-
-client: client.c mysocket.c mysocket.h
-	$(CC) $(flags) client.c mysocket.c -o client
+client: client.c
+	$(CC) $(flags) client.c -lmsocket -o client

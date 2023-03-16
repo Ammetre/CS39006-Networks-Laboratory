@@ -73,7 +73,6 @@ int main(int argc, char * argv[]) {
         newsocket = my_accept(socket, (struct sockaddr *) &client_address, &client_address_length);
 
         requests++;
-        printf("%d\n", newsocket->sockfd);
         my_recv(newsocket, buffer, 0);
         printf("Message from client: %s\n", buffer);
         memset(buffer, 0, sizeof(buffer));
@@ -81,9 +80,10 @@ int main(int argc, char * argv[]) {
         my_send(newsocket, buffer, strlen(buffer) + 1, 0);
 
         my_close(newsocket);
-        printf("Closed!\n");
+        printf("\n");
     }
 
+    printf("Closing R and S threads of listening socket.\n");
     my_close(socket);
 
     return 0;
